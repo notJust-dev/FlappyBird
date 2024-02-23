@@ -1,4 +1,4 @@
-import { useWindowDimensions } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
 import {
   Canvas,
   useImage,
@@ -6,6 +6,8 @@ import {
   rotate,
   Group,
   Fill,
+  Text,
+  matchFont,
 } from '@shopify/react-native-skia';
 import {
   useSharedValue,
@@ -17,8 +19,10 @@ import {
   useDerivedValue,
   interpolate,
   Extrapolation,
+  useAnimatedReaction,
+  runOnJS,
 } from 'react-native-reanimated';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   GestureHandlerRootView,
   GestureDetector,
@@ -30,6 +34,7 @@ const JUMP_FORCE = -500;
 
 const App = () => {
   const { width, height } = useWindowDimensions();
+  const [score, setScore] = useState(0);
 
   const bg = useImage(require('./assets/sprites/background-day.png'));
   const bird = useImage(require('./assets/sprites/yellowbird-upflap.png'));
@@ -40,7 +45,50 @@ const App = () => {
   const x = useSharedValue(width);
 
   const birdY = useSharedValue(height / 3);
+  const birdPos = {
+    x: width / 4,
+  };
   const birdYVelocity = useSharedValue(0);
+
+  useEffect(() => {
+    x.value = withRepeat(
+      withSequence(
+        withTiming(-150, { duration: 3000, easing: Easing.linear }),
+        withTiming(width, { duration: 0 })
+      ),
+      -1
+    );
+  }, []);
+
+  useAnimatedReaction(
+    () => x.value,
+    (currentValue, previousValue) => {
+      const middle = birdPos.x;
+
+      if (
+        currentValue !== previousValue &&
+        previousValue &&
+        currentValue <= middle &&
+        previousValue > middle
+      ) {
+        // do something ✨
+        runOnJS(setScore)(score + 1);
+      }
+    }
+  );
+
+  useFrameCallback(({ timeSincePreviousFrame: dt }) => {
+    if (!dt) {
+      return;
+    }
+    birdY.value = birdY.value + (birdYVelocity.value * dt) / 1000;
+    birdYVelocity.value = birdYVelocity.value + (GRAVITY * dt) / 1000;
+  });
+
+  const gesture = Gesture.Tap().onStart(() => {
+    birdYVelocity.value = JUMP_FORCE;
+  });
+
   const birdTransform = useDerivedValue(() => {
     return [
       {
@@ -57,29 +105,15 @@ const App = () => {
     return { x: width / 4 + 32, y: birdY.value + 24 };
   });
 
-  useFrameCallback(({ timeSincePreviousFrame: dt }) => {
-    if (!dt) {
-      return;
-    }
-    birdY.value = birdY.value + (birdYVelocity.value * dt) / 1000;
-    birdYVelocity.value = birdYVelocity.value + (GRAVITY * dt) / 1000;
-  });
-
-  useEffect(() => {
-    x.value = withRepeat(
-      withSequence(
-        withTiming(-150, { duration: 3000, easing: Easing.linear }),
-        withTiming(width, { duration: 0 })
-      ),
-      -1
-    );
-  }, []);
-
-  const gesture = Gesture.Tap().onStart(() => {
-    birdYVelocity.value = JUMP_FORCE;
-  });
-
   const pipeOffset = 0;
+
+  const fontFamily = Platform.select({ ios: 'Helvetica', default: 'serif' });
+  const fontStyle = {
+    fontFamily,
+    fontSize: 40,
+    fontWeight: 'bold',
+  };
+  const font = matchFont(fontStyle);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -119,11 +153,19 @@ const App = () => {
             <Image
               image={bird}
               y={birdY}
-              x={width / 4}
+              x={birdPos.x}
               width={64}
               height={48}
             />
           </Group>
+
+          {/* Score */}
+          <Text
+            x={width / 2 - 30}
+            y={100}
+            text={score.toString()}
+            font={font}
+          />
         </Canvas>
       </GestureDetector>
     </GestureHandlerRootView>
