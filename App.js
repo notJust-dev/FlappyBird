@@ -1,5 +1,12 @@
 import { useWindowDimensions } from 'react-native';
-import { Canvas, useImage, Image } from '@shopify/react-native-skia';
+import {
+  Canvas,
+  useImage,
+  Image,
+  rotate,
+  Group,
+  Fill,
+} from '@shopify/react-native-skia';
 import {
   useSharedValue,
   withTiming,
@@ -7,6 +14,9 @@ import {
   withSequence,
   withRepeat,
   useFrameCallback,
+  useDerivedValue,
+  interpolate,
+  Extrapolation,
 } from 'react-native-reanimated';
 import { useEffect } from 'react';
 import {
@@ -15,7 +25,8 @@ import {
   Gesture,
 } from 'react-native-gesture-handler';
 
-const GRAVITY = 500;
+const GRAVITY = 1000;
+const JUMP_FORCE = -500;
 
 const App = () => {
   const { width, height } = useWindowDimensions();
@@ -28,8 +39,23 @@ const App = () => {
 
   const x = useSharedValue(width);
 
-  const birdY = useSharedValue(0);
-  const birdYVelocity = useSharedValue(100);
+  const birdY = useSharedValue(height / 3);
+  const birdYVelocity = useSharedValue(0);
+  const birdTransform = useDerivedValue(() => {
+    return [
+      {
+        rotate: interpolate(
+          birdYVelocity.value,
+          [-500, 500],
+          [-0.5, 0.5],
+          Extrapolation.CLAMP
+        ),
+      },
+    ];
+  });
+  const birdOrigin = useDerivedValue(() => {
+    return { x: width / 4 + 32, y: birdY.value + 24 };
+  });
 
   useFrameCallback(({ timeSincePreviousFrame: dt }) => {
     if (!dt) {
@@ -50,7 +76,7 @@ const App = () => {
   }, []);
 
   const gesture = Gesture.Tap().onStart(() => {
-    birdYVelocity.value = -300;
+    birdYVelocity.value = JUMP_FORCE;
   });
 
   const pipeOffset = 0;
@@ -89,7 +115,15 @@ const App = () => {
           />
 
           {/* Bird */}
-          <Image image={bird} y={birdY} x={width / 4} width={64} height={48} />
+          <Group transform={birdTransform} origin={birdOrigin}>
+            <Image
+              image={bird}
+              y={birdY}
+              x={width / 4}
+              width={64}
+              height={48}
+            />
+          </Group>
         </Canvas>
       </GestureDetector>
     </GestureHandlerRootView>
