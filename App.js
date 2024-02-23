@@ -1,15 +1,11 @@
-import { Alert, Platform, useWindowDimensions } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
 import {
   Canvas,
   useImage,
   Image,
-  rotate,
   Group,
-  Fill,
   Text,
   matchFont,
-  Circle,
-  Rect,
 } from '@shopify/react-native-skia';
 import {
   useSharedValue,
@@ -49,47 +45,39 @@ const App = () => {
   const base = useImage(require('./assets/sprites/base.png'));
 
   const gameOver = useSharedValue(false);
-  const x = useSharedValue(width);
+  const pipeX = useSharedValue(width);
 
   const birdY = useSharedValue(height / 3);
-  const birdPos = {
-    x: width / 4,
-  };
+  const birdX = width / 4;
   const birdYVelocity = useSharedValue(0);
 
-  const birdCenterX = useDerivedValue(() => birdPos.x + 32);
-  const birdCenterY = useDerivedValue(() => birdY.value + 24);
   const pipeOffset = useSharedValue(0);
   const topPipeY = useDerivedValue(() => pipeOffset.value - 320);
   const bottomPipeY = useDerivedValue(() => height - 320 + pipeOffset.value);
 
-  const obstacles = useDerivedValue(() => {
-    const allObstacles = [];
-    // add bottom pipe
-    allObstacles.push({
-      x: x.value,
+  const obstacles = useDerivedValue(() => [
+    // bottom pipe
+    {
+      x: pipeX.value,
       y: bottomPipeY.value,
       h: pipeHeight,
       w: pipeWidth,
-    });
-
-    // add top pipe
-    allObstacles.push({
-      x: x.value,
+    },
+    // top pipe
+    {
+      x: pipeX.value,
       y: topPipeY.value,
       h: pipeHeight,
       w: pipeWidth,
-    });
-
-    return allObstacles;
-  });
+    },
+  ]);
 
   useEffect(() => {
     moveTheMap();
   }, []);
 
   const moveTheMap = () => {
-    x.value = withRepeat(
+    pipeX.value = withRepeat(
       withSequence(
         withTiming(-150, { duration: 3000, easing: Easing.linear }),
         withTiming(width, { duration: 0 })
@@ -100,9 +88,9 @@ const App = () => {
 
   // Scoring system
   useAnimatedReaction(
-    () => x.value,
+    () => pipeX.value,
     (currentValue, previousValue) => {
-      const middle = birdPos.x;
+      const middle = birdX;
 
       // change offset for the position of the next gap
       if (previousValue && currentValue < -100 && previousValue > -100) {
@@ -135,16 +123,18 @@ const App = () => {
   useAnimatedReaction(
     () => birdY.value,
     (currentValue, previousValue) => {
+      const center = {
+        x: birdX + 32,
+        y: birdY.value + 24,
+      };
+
       // Ground collision detection
       if (currentValue > height - 100 || currentValue < 0) {
         gameOver.value = true;
       }
 
       const isColliding = obstacles.value.some((rect) =>
-        isPointCollidingWithRect(
-          { x: birdCenterX.value, y: birdCenterY.value },
-          rect
-        )
+        isPointCollidingWithRect(center, rect)
       );
       if (isColliding) {
         gameOver.value = true;
@@ -156,7 +146,7 @@ const App = () => {
     () => gameOver.value,
     (currentValue, previousValue) => {
       if (currentValue && !previousValue) {
-        cancelAnimation(x);
+        cancelAnimation(pipeX);
       }
     }
   );
@@ -174,7 +164,7 @@ const App = () => {
     birdY.value = height / 3;
     birdYVelocity.value = 0;
     gameOver.value = false;
-    x.value = width;
+    pipeX.value = width;
     runOnJS(moveTheMap)();
     runOnJS(setScore)(0);
   };
@@ -224,14 +214,14 @@ const App = () => {
           <Image
             image={pipeTop}
             y={topPipeY}
-            x={x}
+            x={pipeX}
             width={pipeWidth}
             height={pipeHeight}
           />
           <Image
             image={pipeBottom}
             y={bottomPipeY}
-            x={x}
+            x={pipeX}
             width={pipeWidth}
             height={pipeHeight}
           />
@@ -248,17 +238,10 @@ const App = () => {
 
           {/* Bird */}
           <Group transform={birdTransform} origin={birdOrigin}>
-            <Image
-              image={bird}
-              y={birdY}
-              x={birdPos.x}
-              width={64}
-              height={48}
-            />
+            <Image image={bird} y={birdY} x={birdX} width={64} height={48} />
           </Group>
 
           {/* Sim */}
-          {/* <Circle cy={birdCenterY} cx={birdCenterX} r={15} color={'red'} /> */}
 
           {/* Score */}
           <Text
